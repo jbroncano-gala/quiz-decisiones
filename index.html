@@ -1,0 +1,2032 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Quiz: Teoría de Decisiones | Tiempo Real (50 Estudiantes)</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Librería ligera para generar código QR en tiempo real -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+    body {
+      font-family: 'Inter', sans-serif;
+    }
+    .timer-bar-transition {
+      transition: width 0.1s linear, background-color 0.3s ease;
+    }
+    .fade-in {
+      animation: fadeIn 0.25s ease-out;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    /* Custom scrollbar for live ranking */
+    .custom-scroll::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    .custom-scroll::-webkit-scrollbar-track {
+      background: #0f172a;
+      border-radius: 8px;
+    }
+    .custom-scroll::-webkit-scrollbar-thumb {
+      background: #334155;
+      border-radius: 8px;
+    }
+    .custom-scroll::-webkit-scrollbar-thumb:hover {
+      background: #475569;
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col">
+
+  <!-- Toast de notificaciones (reemplaza alert()) -->
+  <div id="toastContainer" class="fixed bottom-4 right-4 z-[100] flex flex-col gap-2 max-w-sm w-full pointer-events-none px-4 sm:px-0"></div>
+
+  <!-- Encabezado principal -->
+  <header class="bg-slate-900/90 border-b border-slate-800 sticky top-0 z-30 backdrop-blur">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center font-extrabold text-lg shadow-lg shadow-indigo-600/30 shrink-0">
+          TD
+        </div>
+        <div>
+          <h1 class="font-bold text-base sm:text-lg leading-tight text-white">Quiz: Teoría de Decisiones</h1>
+          <p class="text-xs text-slate-400">20 preguntas • 40–50s por pregunta • Hasta 2 intentos (Nota Máxima)</p>
+        </div>
+      </div>
+
+      <div class="flex flex-wrap items-center gap-2">
+        <!-- Indicador de conexión en tiempo real -->
+        <span id="syncBadge" class="inline-flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-slate-300">
+          <span id="syncDot" class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+          <span id="syncText">Conectando...</span>
+        </span>
+
+        <!-- Simulador de aula de 50 estudiantes -->
+        <button id="btnToggleSim" onclick="toggleSimulationMode()" class="text-xs px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-300 transition">
+          Simular aula (50): <span id="simStatus" class="font-bold text-amber-400">OFF</span>
+        </button>
+
+        <!-- Vista Pantalla Docente / Proyector -->
+        <button onclick="openTeacherDashboard()" class="text-xs px-3 py-1.5 rounded-lg bg-sky-600/20 border border-sky-500/40 text-sky-300 hover:bg-sky-600/30 transition font-semibold">
+          📺 Ranking en Vivo
+        </button>
+
+        <!-- Configurar Google Sheets -->
+        <button onclick="openSheetsModal()" class="text-xs px-3 py-1.5 rounded-lg bg-emerald-600/20 border border-emerald-500/40 text-emerald-300 hover:bg-emerald-600/30 transition font-semibold">
+          📊 Google Sheets
+        </button>
+
+        <!-- Compartir enlace y código QR -->
+        <button onclick="openShareModal()" class="text-xs px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white transition font-semibold shadow-md shadow-indigo-600/25">
+          📲 Compartir / QR
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Contenido Principal -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 py-6">
+
+    <!-- ===================================================================== -->
+    <!-- PANTALLA 1: INICIO / REGISTRO DEL ESTUDIANTE                          -->
+    <!-- ===================================================================== -->
+    <section id="screenStart" class="max-w-3xl mx-auto fade-in">
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 sm:p-8 shadow-2xl">
+        <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
+          <span class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/15 border border-indigo-500/30 text-indigo-300 text-xs font-semibold">
+            Evaluación Simultánea en Tiempo Real • Hasta 50 Estudiantes
+          </span>
+          <span id="onlineCountBadge" class="text-xs text-slate-400 font-medium">
+            👥 0 participantes registrados
+          </span>
+        </div>
+
+        <h2 class="text-2xl sm:text-3xl font-extrabold text-white mb-2">Desafío de Toma de Decisiones</h2>
+        <p class="text-slate-400 text-sm sm:text-base mb-6">
+          Ingresa tu código (o correo) y tu nombre completo para iniciar. Tienes hasta <strong>2 intentos</strong>; el sistema y la hoja de Google Sheets registrarán automáticamente tu <strong>nota máxima</strong> como calificación oficial.
+        </p>
+
+        <!-- Reglas de tiempo (40 a 50 segundos) -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
+          <div class="bg-slate-800/70 border border-slate-700/70 rounded-xl p-3.5">
+            <div class="text-emerald-400 font-bold text-xs uppercase tracking-wide mb-1">Fácil • 40 segundos</div>
+            <div class="text-xs text-slate-300">Conceptos clave, certidumbre, incertidumbre y nodos.</div>
+          </div>
+          <div class="bg-slate-800/70 border border-slate-700/70 rounded-xl p-3.5">
+            <div class="text-amber-400 font-bold text-xs uppercase tracking-wide mb-1">Media • 45 segundos</div>
+            <div class="text-xs text-slate-300">Aplicación de criterios maximin, herramientas e información.</div>
+          </div>
+          <div class="bg-slate-800/70 border border-slate-700/70 rounded-xl p-3.5">
+            <div class="text-rose-400 font-bold text-xs uppercase tracking-wide mb-1">Difícil • 50 segundos</div>
+            <div class="text-xs text-slate-300">Cálculos de valor esperado y árboles de decisión.</div>
+          </div>
+        </div>
+
+        <!-- Reglas de Ranking e Intentos -->
+        <div class="bg-indigo-950/40 border border-indigo-500/30 rounded-xl p-4 mb-6 text-xs sm:text-sm text-indigo-200 space-y-1.5">
+          <div class="flex items-start gap-2.5">
+            <span class="text-base leading-none">🏆</span>
+            <div><strong>Criterio de Ranking en Vivo:</strong> Se ordena primero por <strong>mayor nota (aciertos sobre 20)</strong> y se desempata por el <strong>menor tiempo total acumulado</strong>.</div>
+          </div>
+          <div class="flex items-start gap-2.5">
+            <span class="text-base leading-none">🎯</span>
+            <div><strong>Política de 2 Intentos:</strong> Puedes rendir el quiz hasta 2 veces. <strong>Se considera únicamente tu nota máxima obtenida</strong> en el registro oficial de notas.</div>
+          </div>
+        </div>
+
+        <!-- Formulario de ingreso -->
+        <form id="startForm" onsubmit="handleStartSubmit(event)" class="space-y-4">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label for="studentCode" class="block text-sm font-semibold text-slate-200 mb-1.5">Código de estudiante o DNI</label>
+              <input
+                id="studentCode"
+                type="text"
+                required
+                maxlength="25"
+                placeholder="Ej. 20261045"
+                oninput="previewStudentAttempts()"
+                class="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-700 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              />
+            </div>
+            <div>
+              <label for="studentName" class="block text-sm font-semibold text-slate-200 mb-1.5">Apellidos y Nombres</label>
+              <input
+                id="studentName"
+                type="text"
+                required
+                maxlength="50"
+                placeholder="Ej. López Pérez, María Fernanda"
+                class="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-700 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              />
+            </div>
+          </div>
+
+          <!-- Estado de intentos del estudiante detectado -->
+          <div id="attemptStatusBanner" class="hidden p-3.5 rounded-xl border text-xs sm:text-sm"></div>
+
+          <button
+            id="btnStartQuiz"
+            type="submit"
+            class="w-full py-3.5 px-6 rounded-xl bg-indigo-600 hover:bg-indigo-500 active:scale-[0.99] text-white font-bold text-base shadow-lg shadow-indigo-600/30 transition disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Comenzar Intento 1 de 2 →
+          </button>
+        </form>
+      </div>
+    </section>
+
+    <!-- ===================================================================== -->
+    <!-- PANTALLA 2: QUIZ ACTIVO + RANKING EN TIEMPO REAL                      -->
+    <!-- ===================================================================== -->
+    <section id="screenQuiz" class="hidden fade-in">
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+
+        <!-- Columna izquierda: Área de Pregunta -->
+        <div class="lg:col-span-8 bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-7 shadow-2xl">
+          <!-- Info del intento y posición actual -->
+          <div class="flex flex-wrap items-center justify-between gap-2 pb-4 mb-4 border-b border-slate-800">
+            <div class="flex flex-wrap items-center gap-2 text-xs">
+              <span id="quizStudentTag" class="px-2.5 py-1 rounded-lg bg-slate-800 text-slate-200 font-semibold"></span>
+              <span id="quizAttemptTag" class="px-2.5 py-1 rounded-lg bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 font-bold"></span>
+            </div>
+            <div id="liveMyPositionBanner" class="text-xs font-bold px-3 py-1 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-300">
+              Posición actual: #1 de 1
+            </div>
+          </div>
+
+          <!-- Barra de estado de la pregunta -->
+          <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+            <div class="flex items-center gap-2.5">
+              <span id="qCounter" class="px-3 py-1 rounded-lg bg-slate-800 text-slate-200 font-bold text-sm">
+                Pregunta 1 / 20
+              </span>
+              <span id="qDifficulty" class="px-2.5 py-1 rounded-lg text-xs font-bold uppercase tracking-wider">
+                Fácil • 40s
+              </span>
+            </div>
+            <div class="flex items-center gap-4 text-sm">
+              <div class="text-slate-400">
+                Nota: <span id="liveScore" class="font-bold text-emerald-400">0</span>/20
+              </div>
+              <div class="text-slate-400">
+                Tiempo: <span id="liveTotalTime" class="font-bold text-sky-400">0.0s</span>
+              </div>
+              <div id="timerDisplay" class="px-3 py-1 rounded-lg bg-indigo-600/20 border border-indigo-500/40 font-mono font-extrabold text-lg text-indigo-300 min-w-[78px] text-center">
+                40.0s
+              </div>
+            </div>
+          </div>
+
+          <!-- Barra de tiempo regresiva -->
+          <div class="w-full h-2.5 bg-slate-800 rounded-full overflow-hidden mb-6">
+            <div id="timerBar" class="h-full bg-indigo-500 timer-bar-transition" style="width: 100%;"></div>
+          </div>
+
+          <!-- Enunciado -->
+          <h3 id="questionText" class="text-lg sm:text-xl font-bold text-white leading-snug mb-6">
+            Cargando pregunta...
+          </h3>
+
+          <!-- Opciones -->
+          <div id="optionsContainer" class="space-y-3"></div>
+
+          <!-- Retroalimentación inmediata -->
+          <div id="feedbackBox" class="hidden mt-6 p-4 rounded-xl border fade-in">
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <div id="feedbackTitle" class="font-bold text-sm mb-1"></div>
+                <p id="feedbackText" class="text-xs sm:text-sm text-slate-300 leading-relaxed"></p>
+              </div>
+              <span id="feedbackTimeUsed" class="shrink-0 text-xs font-mono px-2.5 py-1 rounded-md bg-slate-950/60 text-slate-300"></span>
+            </div>
+            <div class="mt-4 flex justify-end">
+              <button id="btnNext" onclick="nextQuestion()" class="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm transition">
+                Siguiente pregunta →
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Columna derecha: Ranking en Vivo (Primeros puestos y Todos) -->
+        <aside class="lg:col-span-4 bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl">
+          <div class="flex items-center justify-between gap-2 mb-3">
+            <h4 class="font-bold text-sm text-white flex items-center gap-1.5">
+              <span>⚡</span> Ranking en Vivo
+            </h4>
+            <div class="flex rounded-lg bg-slate-950 p-0.5 border border-slate-800 text-[11px]">
+              <button id="tabTop" onclick="setLiveTab('top')" class="px-2.5 py-1 rounded-md bg-indigo-600 text-white font-semibold transition">Top 15</button>
+              <button id="tabAll" onclick="setLiveTab('all')" class="px-2.5 py-1 rounded-md text-slate-400 hover:text-white transition">Todos (<span id="liveTotalParticipants">0</span>)</button>
+            </div>
+          </div>
+
+          <p class="text-[11px] text-slate-400 mb-3 flex items-center justify-between">
+            <span>Orden: Nota ↓ • Tiempo ↑</span>
+            <span class="text-emerald-400 font-medium">● En tiempo real</span>
+          </p>
+
+          <div id="liveRankingList" class="space-y-1.5 max-h-[500px] overflow-y-auto custom-scroll pr-1"></div>
+        </aside>
+
+      </div>
+    </section>
+
+    <!-- ===================================================================== -->
+    <!-- PANTALLA 3: RESULTADOS FINALES + PODIO + TODOS LOS PARTICIPANTES      -->
+    <!-- ===================================================================== -->
+    <section id="screenResult" class="hidden max-w-6xl mx-auto fade-in space-y-6">
+
+      <!-- Tarjeta de Resumen del Estudiante -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 sm:p-8 shadow-2xl text-center">
+        <div class="text-4xl mb-2">🎉</div>
+        <h2 class="text-2xl sm:text-3xl font-extrabold text-white mb-1">¡Intento Completado!</h2>
+        <p id="resultStudentLabel" class="text-slate-400 text-sm sm:text-base mb-5"></p>
+
+        <!-- Estado de envío a Google Sheets -->
+        <div id="sheetsSyncStatus" class="hidden max-w-lg mx-auto mb-5 px-4 py-2 rounded-xl text-xs font-medium border"></div>
+
+        <!-- Métricas principales -->
+        <div class="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-6">
+          <div class="bg-slate-800/70 border border-slate-700 rounded-xl p-4">
+            <div class="text-xs text-slate-400 mb-1">Nota este intento</div>
+            <div id="resScore" class="text-2xl font-extrabold text-sky-400">0 / 20</div>
+          </div>
+          <div class="bg-emerald-950/40 border border-emerald-500/40 rounded-xl p-4">
+            <div class="text-xs text-emerald-300 font-semibold mb-1">Nota Máxima Oficial</div>
+            <div id="resMaxScore" class="text-2xl font-extrabold text-emerald-400">0 / 20</div>
+          </div>
+          <div class="bg-slate-800/70 border border-slate-700 rounded-xl p-4">
+            <div class="text-xs text-slate-400 mb-1">Tiempo Total</div>
+            <div id="resTime" class="text-2xl font-extrabold text-amber-400">0.0s</div>
+          </div>
+          <div class="bg-slate-800/70 border border-slate-700 rounded-xl p-4">
+            <div class="text-xs text-slate-400 mb-1">Intentos Usados</div>
+            <div id="resAttempts" class="text-2xl font-extrabold text-purple-400">1 / 2</div>
+          </div>
+          <div class="bg-slate-800/70 border border-slate-700 rounded-xl p-4 col-span-2 sm:col-span-1">
+            <div class="text-xs text-slate-400 mb-1">Tu Posición</div>
+            <div id="resRank" class="text-2xl font-extrabold text-indigo-400">#1</div>
+          </div>
+        </div>
+
+        <div class="flex flex-wrap justify-center gap-3">
+          <button id="btnRetryAttempt" onclick="startAnotherAttempt()" class="px-5 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm transition shadow-lg shadow-indigo-600/25">
+            🔄 Realizar siguiente intento
+          </button>
+          <button onclick="resetToStartScreen()" class="px-5 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 font-bold text-sm transition">
+            + Nuevo estudiante
+          </button>
+          <button onclick="exportFullRankingCSV()" class="px-5 py-3 rounded-xl bg-emerald-600/20 border border-emerald-500/40 hover:bg-emerald-600/30 text-emerald-300 font-bold text-sm transition">
+            📥 Exportar Control de Notas (CSV / Sheets)
+          </button>
+        </div>
+      </div>
+
+      <!-- Podio de los 3 primeros lugares -->
+      <div id="podiumSection" class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl">
+        <h3 class="text-lg font-bold text-white mb-4 flex items-center gap-2">
+          <span>🏆</span> Primeros Puestos del Ranking (Nota Máxima y Velocidad)
+        </h3>
+        <div id="podiumCards" class="grid grid-cols-1 md:grid-cols-3 gap-4"></div>
+      </div>
+
+      <!-- Tabla Final Completa: TODOS los estudiantes que han participado -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl">
+        <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+          <div>
+            <h3 class="text-lg font-bold text-white">📋 Ranking General Completo — Todos los Participantes (<span id="finalTotalCount">0</span>)</h3>
+            <p class="text-xs text-slate-400 mt-0.5">Se muestra el historial de los 2 intentos. <strong class="text-emerald-400">Nota Considerada = Nota Máxima obtenida.</strong></p>
+          </div>
+          <div class="flex items-center gap-2">
+            <input
+              id="searchFinalTable"
+              type="text"
+              placeholder="Buscar estudiante o código..."
+              oninput="renderFinalRankingTable()"
+              class="text-xs px-3 py-2 rounded-lg bg-slate-950 border border-slate-700 text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            />
+            <button onclick="openClearConfirmModal()" class="text-xs px-3 py-2 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-400 hover:bg-rose-500/20 transition">
+              Limpiar Sala
+            </button>
+          </div>
+        </div>
+
+        <div class="overflow-x-auto custom-scroll">
+          <table class="w-full text-left border-collapse text-sm min-w-[760px]">
+            <thead>
+              <tr class="border-b border-slate-800 text-slate-400 text-xs uppercase bg-slate-950/50">
+                <th class="py-3 px-3">Puesto</th>
+                <th class="py-3 px-3">Código</th>
+                <th class="py-3 px-3">Estudiante</th>
+                <th class="py-3 px-2 text-center">Intento 1</th>
+                <th class="py-3 px-2 text-center">Intento 2</th>
+                <th class="py-3 px-3 text-center text-emerald-400">Nota Máxima (Oficial)</th>
+                <th class="py-3 px-3 text-right">Mejor Tiempo</th>
+                <th class="py-3 px-3 text-right">Estado</th>
+              </tr>
+            </thead>
+            <tbody id="finalRankingTable" class="divide-y divide-slate-800/70"></tbody>
+          </table>
+        </div>
+      </div>
+
+    </section>
+
+  </main>
+
+  <!-- ======================================================================= -->
+  <!-- MODAL: PANTALLA DOCENTE / PROYECTOR DE RANKING EN TIEMPO REAL           -->
+  <!-- ======================================================================= -->
+  <div id="teacherModal" class="hidden fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-6xl w-full p-5 sm:p-6 shadow-2xl max-h-[92vh] flex flex-col">
+      <div class="flex flex-wrap items-center justify-between gap-3 mb-4 pb-3 border-b border-slate-800">
+        <div>
+          <h3 class="text-lg sm:text-xl font-extrabold text-white flex items-center gap-2">
+            <span>📺</span> Monitor de Ranking en Tiempo Real — Todos los Estudiantes
+          </h3>
+          <p class="text-xs text-slate-400">Actualización automática en vivo • Ordenado por Nota Máxima y Menor Tiempo Total</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <button onclick="exportFullRankingCSV()" class="text-xs px-3 py-2 rounded-lg bg-emerald-600/20 border border-emerald-500/40 text-emerald-300 font-semibold hover:bg-emerald-600/30">
+            📥 Exportar CSV
+          </button>
+          <button onclick="closeTeacherDashboard()" class="text-xs px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-semibold">
+            Cerrar ✕
+          </button>
+        </div>
+      </div>
+
+      <!-- Resumen rápido en vivo -->
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+        <div class="bg-slate-950/60 border border-slate-800 rounded-xl p-3">
+          <div class="text-[11px] text-slate-400">Participantes Totales</div>
+          <div id="dashTotal" class="text-xl font-extrabold text-white">0</div>
+        </div>
+        <div class="bg-slate-950/60 border border-slate-800 rounded-xl p-3">
+          <div class="text-[11px] text-slate-400">En Curso Ahora</div>
+          <div id="dashActive" class="text-xl font-extrabold text-amber-400">0</div>
+        </div>
+        <div class="bg-slate-950/60 border border-slate-800 rounded-xl p-3">
+          <div class="text-[11px] text-slate-400">Finalizados</div>
+          <div id="dashFinished" class="text-xl font-extrabold text-emerald-400">0</div>
+        </div>
+        <div class="bg-slate-950/60 border border-slate-800 rounded-xl p-3">
+          <div class="text-[11px] text-slate-400">Promedio Nota Máxima</div>
+          <div id="dashAvg" class="text-xl font-extrabold text-indigo-400">0.0</div>
+        </div>
+      </div>
+
+      <div class="overflow-y-auto custom-scroll flex-1">
+        <table class="w-full text-left border-collapse text-sm min-w-[720px]">
+          <thead class="sticky top-0 bg-slate-900 z-10">
+            <tr class="border-b border-slate-800 text-slate-400 text-xs uppercase">
+              <th class="py-2.5 px-3">#</th>
+              <th class="py-2.5 px-3">Estudiante</th>
+              <th class="py-2.5 px-3 text-center">Progreso</th>
+              <th class="py-2.5 px-2 text-center">Int. 1</th>
+              <th class="py-2.5 px-2 text-center">Int. 2</th>
+              <th class="py-2.5 px-3 text-center text-emerald-400">Nota Máxima</th>
+              <th class="py-2.5 px-3 text-right">Tiempo</th>
+              <th class="py-2.5 px-3 text-right">Estado</th>
+            </tr>
+          </thead>
+          <tbody id="teacherModalBody" class="divide-y divide-slate-800/70"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================================================================= -->
+  <!-- MODAL: CONFIGURACIÓN DE GOOGLE SHEETS (CONTROL DE NOTAS AUTOMÁTICO)     -->
+  <!-- ======================================================================= -->
+  <div id="sheetsModal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-3xl w-full p-6 shadow-2xl max-h-[90vh] flex flex-col">
+      <div class="flex items-center justify-between mb-4 pb-3 border-b border-slate-800">
+        <div>
+          <h3 class="text-lg font-bold text-white flex items-center gap-2">
+            <span>📊</span> Conexión con Google Sheets (Control de Notas)
+          </h3>
+          <p class="text-xs text-slate-400">Guarda los 2 intentos por estudiante y calcula automáticamente la <strong>Nota Máxima Considerada</strong>.</p>
+        </div>
+        <button onclick="closeSheetsModal()" class="text-slate-400 hover:text-white text-xl font-bold px-2">&times;</button>
+      </div>
+
+      <div class="overflow-y-auto custom-scroll flex-1 space-y-4 pr-1 text-xs sm:text-sm text-slate-300">
+        <!-- Input para pegar URL del Web App de Google Apps Script -->
+        <div class="bg-slate-950/70 border border-slate-800 rounded-xl p-4">
+          <label for="sheetsWebhookUrl" class="block text-xs font-bold uppercase tracking-wide text-emerald-400 mb-2">
+            1. Pega aquí el enlace de tu Google Apps Script (Web App URL)
+          </label>
+          <div class="flex flex-col sm:flex-row gap-2">
+            <input
+              id="sheetsWebhookUrl"
+              type="url"
+              placeholder="https://script.google.com/macros/s/AKfycb.../exec"
+              class="flex-1 px-3 py-2.5 rounded-lg bg-slate-900 border border-slate-700 text-white text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            />
+            <button onclick="saveSheetsUrl()" class="px-4 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition shrink-0">
+              Guardar Enlace
+            </button>
+          </div>
+          <p class="text-[11px] text-slate-400 mt-2">
+            Al guardar, los 50 estudiantes enviarán automáticamente sus notas al finalizar cada intento.
+          </p>
+        </div>
+
+        <!-- Instrucciones paso a paso -->
+        <div class="bg-slate-800/50 border border-slate-700/70 rounded-xl p-4 space-y-2">
+          <div class="font-bold text-white text-xs uppercase tracking-wide">2. Cómo activar tu hoja de Google Sheets (toma 1 minuto):</div>
+          <ol class="list-decimal list-inside space-y-1 text-xs text-slate-300">
+            <li>Abre una hoja nueva en <strong>Google Sheets</strong> y ve a <strong>Extensiones → Apps Script</strong>.</li>
+            <li>Borra el contenido, pega el código de abajo y haz clic en <strong>Implementar → Nueva implementación</strong>.</li>
+            <li>Selecciona tipo <strong>Aplicación web</strong>, en "Quién tiene acceso" elige <strong>Cualquier usuario</strong> y haz clic en <strong>Implementar</strong>.</li>
+            <li>Copia la URL generada y pégala en el recuadro superior.</li>
+          </ol>
+        </div>
+
+        <!-- Código de Google Apps Script listo para copiar -->
+        <div>
+          <div class="flex items-center justify-between mb-1.5">
+            <span class="text-xs font-bold text-slate-300">Código Google Apps Script (Registra 2 intentos + Nota Máxima):</span>
+            <button onclick="copyAppsScriptCode()" class="text-xs px-3 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold transition">
+              📋 Copiar Código
+            </button>
+          </div>
+          <textarea id="appsScriptCode" readonly rows="11" class="w-full p-3 rounded-xl bg-slate-950 border border-slate-800 text-emerald-300 font-mono text-[11px] leading-relaxed focus:outline-none"></textarea>
+        </div>
+      </div>
+
+      <div class="mt-4 pt-3 border-t border-slate-800 flex justify-end">
+        <button onclick="closeSheetsModal()" class="text-xs px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-semibold">
+          Cerrar
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================================================================= -->
+  <!-- MODAL DE CONFIRMACIÓN PERSONALIZADO (reemplaza confirm())               -->
+  <!-- ======================================================================= -->
+  <div id="confirmModal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-md w-full p-6 shadow-2xl">
+      <h3 class="text-lg font-bold text-white mb-2">¿Limpiar todos los registros de la sala?</h3>
+      <p class="text-sm text-slate-400 mb-6">
+        Esta acción reiniciará el ranking actual de todos los estudiantes en pantalla para comenzar una nueva sesión. (Los datos ya enviados a Google Sheets no se borrarán).
+      </p>
+      <div class="flex justify-end gap-2">
+        <button onclick="closeClearConfirmModal()" class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold">
+          Cancelar
+        </button>
+        <button onclick="executeClearRoom()" class="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold">
+          Sí, reiniciar sala
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================================================================= -->
+  <!-- MODAL: COMPARTIR ENLACE Y CÓDIGO QR PARA ESTUDIANTES                    -->
+  <!-- ======================================================================= -->
+  <div id="shareModal" class="hidden fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-lg w-full p-6 shadow-2xl max-h-[92vh] overflow-y-auto custom-scroll">
+      <div class="flex items-center justify-between mb-4 pb-3 border-b border-slate-800">
+        <div>
+          <h3 class="text-lg font-bold text-white flex items-center gap-2">
+            <span>📲</span> Acceso para Estudiantes (Enlace + QR)
+          </h3>
+          <p class="text-xs text-slate-400">Proyecta este código QR en clase o comparte el enlace directo.</p>
+        </div>
+        <button onclick="closeShareModal()" class="text-slate-400 hover:text-white text-xl font-bold px-2">&times;</button>
+      </div>
+
+      <!-- Aviso si está en vista previa local/privada -->
+      <div id="sharePreviewWarning" class="hidden mb-4 p-3 rounded-xl bg-amber-950/40 border border-amber-500/40 text-amber-200 text-xs leading-relaxed">
+        <strong>Nota importante:</strong> Estás en una vista previa interna. Para que tus 50 estudiantes puedan escanear y entrar desde sus celulares, primero publica o comparte este quiz (usando el botón <strong>Compartir</strong> de la plataforma o subiendo el archivo HTML a Netlify Drop / GitHub Pages) y pega aquí abajo el enlace público resultante para generar su QR.
+      </div>
+
+      <!-- Enlace editable y botón copiar -->
+      <div class="mb-5">
+        <label for="shareLinkInput" class="block text-xs font-bold uppercase tracking-wide text-indigo-300 mb-1.5">
+          Enlace de ingreso al Quiz
+        </label>
+        <div class="flex flex-col sm:flex-row gap-2">
+          <input
+            id="shareLinkInput"
+            type="url"
+            oninput="generateQuizQR()"
+            placeholder="https://tu-enlace-del-quiz.com"
+            class="flex-1 px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          />
+          <button onclick="copyShareLink()" class="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition shrink-0">
+            📋 Copiar Enlace
+          </button>
+        </div>
+      </div>
+
+      <!-- Contenedor del Código QR -->
+      <div class="flex flex-col items-center justify-center bg-white rounded-2xl p-6 shadow-inner mb-4">
+        <div id="qrCodeContainer" class="flex items-center justify-center min-h-[220px] min-w-[220px]"></div>
+        <p class="text-slate-800 font-bold text-sm mt-3 text-center">Escanea con tu cámara para iniciar el Quiz</p>
+        <p class="text-slate-500 text-xs mt-0.5 text-center">Teoría de Decisiones • 20 preguntas • Máx. 2 intentos</p>
+      </div>
+
+      <div class="flex justify-end">
+        <button onclick="closeShareModal()" class="text-xs px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-semibold">
+          Cerrar
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================================================================= -->
+  <!-- LÓGICA DE LA APLICACIÓN + SINCRONIZACIÓN EN TIEMPO REAL                 -->
+  <!-- ======================================================================= -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getFirestore, collection, doc, setDoc, getDocs, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+    // =========================================================================
+    // 1. BANCO DE 20 PREGUNTAS (TIEMPOS ADAPTADOS DE 40 A 50 SEGUNDOS)
+    // =========================================================================
+    const QUESTIONS = [
+      {
+        id: 1,
+        question: "Según la clasificación de la teoría de decisiones, ¿qué caracteriza principalmente una decisión bajo riesgo?",
+        options: [
+          "Se conocen o estiman las probabilidades de los posibles resultados.",
+          "Se desconocen por completo las probabilidades de los eventos.",
+          "El resultado depende exclusivamente de las jugadas de un rival racional.",
+          "Se conocen con certeza absoluta las consecuencias de cada alternativa."
+        ],
+        correct: 0,
+        timeLimit: 40,
+        difficulty: "Fácil",
+        explanation: "Bajo riesgo no se conoce con certeza el resultado, pero sí se conocen o estiman probabilidades mediante datos históricos, estadísticas o modelos."
+      },
+      {
+        id: 2,
+        question: "¿Cuál es la diferencia fundamental entre riesgo e incertidumbre?",
+        options: [
+          "En el riesgo existe un competidor racional y en la incertidumbre no.",
+          "En el riesgo se conocen o estiman probabilidades y en la incertidumbre no.",
+          "En la incertidumbre se conoce el resultado exacto y en el riesgo no.",
+          "En el riesgo los resultados son siempre pérdidas y en la incertidumbre ganancias."
+        ],
+        correct: 1,
+        timeLimit: 40,
+        difficulty: "Fácil",
+        explanation: "Ambos conceptos se distinguen por el conocimiento de las probabilidades: estimables en riesgo y desconocidas en incertidumbre."
+      },
+      {
+        id: 3,
+        question: "Una empresa conoce exactamente el costo de transportar mercancías por cada ruta y elige la más económica. ¿Qué condición enfrenta?",
+        options: ["Conflicto", "Incertidumbre", "Certidumbre", "Riesgo"],
+        correct: 2,
+        timeLimit: 40,
+        difficulty: "Fácil",
+        explanation: "Cuando las consecuencias de cada alternativa se conocen con certeza, la decisión es determinista y se encuentra bajo certidumbre."
+      },
+      {
+        id: 4,
+        question: "¿Qué enfoque estudia situaciones en las que el resultado depende también de las decisiones de un rival racional?",
+        options: ["Teoría de colas", "Programación lineal", "Teoría de juegos", "Control de inventarios"],
+        correct: 2,
+        timeLimit: 40,
+        difficulty: "Fácil",
+        explanation: "La teoría de juegos analiza decisiones estratégicas donde los resultados dependen de las acciones de otros agentes con intereses propios."
+      },
+      {
+        id: 5,
+        question: "En una decisión bajo incertidumbre, ¿qué información falta principalmente?",
+        options: [
+          "Las alternativas de decisión disponibles",
+          "Las probabilidades confiables de ocurrencia de los eventos",
+          "Los objetivos generales de la empresa",
+          "Los posibles resultados de cada alternativa"
+        ],
+        correct: 1,
+        timeLimit: 40,
+        difficulty: "Fácil",
+        explanation: "Se pueden conocer las alternativas y sus posibles resultados, pero no se dispone de probabilidades confiables para los eventos."
+      },
+      {
+        id: 6,
+        question: "En un árbol de decisión, ¿qué representa normalmente un nodo cuadrado?",
+        options: [
+          "Un evento aleatorio o estado de la naturaleza",
+          "Un punto o nodo de decisión",
+          "El resultado final o pago obtenido",
+          "La probabilidad acumulada de una rama"
+        ],
+        correct: 1,
+        timeLimit: 40,
+        difficulty: "Fácil",
+        explanation: "Los cuadrados representan puntos de decisión; los nodos circulares representan eventos o situaciones aleatorias."
+      },
+      {
+        id: 7,
+        question: "Una empresa estima una ganancia de S/ 50 000 con probabilidad 0,6 y de S/ 10 000 con probabilidad 0,4. ¿Cuál es el valor esperado?",
+        options: ["S/ 24 000", "S/ 30 000", "S/ 34 000", "S/ 40 000"],
+        correct: 2,
+        timeLimit: 50,
+        difficulty: "Difícil",
+        explanation: "VE = (50 000 × 0,6) + (10 000 × 0,4) = 30 000 + 4 000 = S/ 34 000."
+      },
+      {
+        id: 8,
+        question: "Una empresa evalúa dos proyectos. A genera S/ 80 000 (0,5) y S/ 20 000 (0,5). B genera S/ 60 000 (0,8) y S/ 10 000 (0,2). ¿Qué conclusión se obtiene al maximizar el valor esperado?",
+        options: [
+          "A es superior a B porque ofrece una mayor ganancia máxima",
+          "B es superior a A porque tiene mayor probabilidad de éxito",
+          "Ambos proyectos empatan con un valor esperado de S/ 50 000",
+          "No se puede calcular el valor esperado sin datos históricos adicionales"
+        ],
+        correct: 2,
+        timeLimit: 50,
+        difficulty: "Difícil",
+        explanation: "VE(A) = 80 000(0,5) + 20 000(0,5) = S/ 50 000. VE(B) = 60 000(0,8) + 10 000(0,2) = S/ 50 000. Ambos empatan; pueden usarse criterios adicionales."
+      },
+      {
+        id: 9,
+        question: "Una fábrica considera fabricar 100, 200 o 300 unidades, pero no puede asignar probabilidades a la demanda futura. ¿Qué tipo de decisión enfrenta?",
+        options: ["Certidumbre", "Riesgo", "Incertidumbre", "Conflicto"],
+        correct: 2,
+        timeLimit: 40,
+        difficulty: "Fácil",
+        explanation: "La ausencia de probabilidades conocidas o estimables, aun con alternativas y resultados posibles identificados, define la incertidumbre."
+      },
+      {
+        id: 10,
+        question: "El criterio maximax aplicado a una matriz de beneficios expresa una actitud:",
+        options: [
+          "Pesimista o conservadora",
+          "Optimista",
+          "Neutral, que pondera por probabilidades",
+          "Estratégica, que anticipa la jugada de un rival"
+        ],
+        correct: 1,
+        timeLimit: 40,
+        difficulty: "Fácil",
+        explanation: "El maximax es un criterio optimista: identifica el mejor pago de cada alternativa y selecciona el mayor de ellos."
+      },
+      {
+        id: 11,
+        question: "Según el criterio maximin de Wald, aplicado a beneficios, ¿cómo decide un gerente?",
+        options: [
+          "Selecciona la alternativa con el mayor de los beneficios mínimos",
+          "Selecciona la alternativa con el beneficio máximo más alto",
+          "Calcula promedios ponderados usando probabilidades",
+          "Elige la alternativa con menor costo de oportunidad máximo"
+        ],
+        correct: 0,
+        timeLimit: 45,
+        difficulty: "Media",
+        explanation: "El maximin es conservador: compara el mínimo beneficio de cada alternativa y elige el mayor de esos mínimos."
+      },
+      {
+        id: 12,
+        question: "Una empresa tiene dos alternativas. La primera produce beneficios de S/ 40 000, S/ 10 000 y -S/ 5 000; la segunda, S/ 25 000, S/ 15 000 y S/ 5 000. Con maximin, ¿cuál selecciona?",
+        options: [
+          "Primera, porque tiene el mayor beneficio máximo (S/ 40 000)",
+          "Segunda, porque su peor resultado (S/ 5 000) es superior al de la primera (-S/ 5 000)",
+          "Primera, porque la suma total de sus pagos es mayor",
+          "Ambas, porque no se conocen las probabilidades de los escenarios"
+        ],
+        correct: 1,
+        timeLimit: 45,
+        difficulty: "Media",
+        explanation: "Los mínimos son -S/ 5 000 y S/ 5 000. Maximin selecciona la segunda alternativa porque su peor resultado es superior."
+      },
+      {
+        id: 13,
+        question: "Una empresa de alimentos obtiene S/ 100 000 si la demanda es alta (probabilidad 0,3) y S/ 40 000 si es baja (0,7). ¿Cuál es su beneficio esperado?",
+        options: ["S/ 58 000", "S/ 60 000", "S/ 70 000", "S/ 82 000"],
+        correct: 0,
+        timeLimit: 50,
+        difficulty: "Difícil",
+        explanation: "VE = 100 000(0,3) + 40 000(0,7) = 30 000 + 28 000 = S/ 58 000."
+      },
+      {
+        id: 14,
+        question: "Dos compañías de telefonía deciden simultáneamente si reducir o mantener sus tarifas. La ganancia de cada una depende de la estrategia elegida por la otra. ¿Qué enfoque resulta más pertinente?",
+        options: ["Árbol de decisión simple", "Teoría de juegos", "Criterio maximax", "Programación lineal"],
+        correct: 1,
+        timeLimit: 40,
+        difficulty: "Fácil",
+        explanation: "Es una situación de conflicto estratégico: cada empresa debe anticipar la acción de un competidor racional con objetivos propios."
+      },
+      {
+        id: 15,
+        question: "En un árbol de decisión, una alternativa conduce a ganancias de S/ 40 000 (prob. 0,3) y S/ 30 000 (prob. 0,7). ¿Cuál es su valor esperado?",
+        options: ["S/ 30 000", "S/ 33 000", "S/ 35 000", "S/ 37 000"],
+        correct: 1,
+        timeLimit: 50,
+        difficulty: "Difícil",
+        explanation: "VE = 40 000(0,3) + 30 000(0,7) = 12 000 + 21 000 = S/ 33 000."
+      },
+      {
+        id: 16,
+        question: "¿Por qué se recomienda obtener información adicional al decidir bajo incertidumbre?",
+        options: [
+          "Para convertir automáticamente el problema en certidumbre absoluta",
+          "Para eliminar por completo cualquier posibilidad de pérdida",
+          "Para reducir la incertidumbre y mejorar la calidad de la decisión",
+          "Para evitar definir alternativas y estados de la naturaleza"
+        ],
+        correct: 2,
+        timeLimit: 45,
+        difficulty: "Media",
+        explanation: "La información adicional puede reducir la incertidumbre y mejorar la calidad de la decisión, aunque no garantiza eliminarla."
+      },
+      {
+        id: 17,
+        question: "Una distribuidora debe escoger entre tres proveedores. Tiene probabilidades estimadas de retraso y costos asociados derivados de registros históricos. ¿Qué herramienta inicial es coherente con una decisión bajo riesgo?",
+        options: [
+          "Matriz de pagos con probabilidades y cálculo del valor esperado",
+          "Criterio maximin ignorando las probabilidades históricas",
+          "Teoría de juegos frente a un competidor racional",
+          "Elegir al azar para evitar sesgos en los registros"
+        ],
+        correct: 0,
+        timeLimit: 45,
+        difficulty: "Media",
+        explanation: "Bajo riesgo se construye una matriz de alternativas, eventos y resultados; luego se calcula el valor esperado para comparar beneficios o costos."
+      },
+      {
+        id: 18,
+        question: "Una empresa debe elegir entre A y B. A ofrece S/ 90 000 si el mercado crece y S/ 10 000 si cae; B ofrece S/ 55 000 en ambos escenarios. No hay probabilidades confiables. ¿Qué alternativa recomienda el criterio maximin?",
+        options: [
+          "A, porque ofrece el máximo beneficio posible (S/ 90 000)",
+          "B, porque su mínimo garantizado (S/ 55 000) es mayor que el de A (S/ 10 000)",
+          "A, porque tiene mayor promedio simple de beneficios",
+          "Ambas, porque el valor esperado es equivalente"
+        ],
+        correct: 1,
+        timeLimit: 45,
+        difficulty: "Media",
+        explanation: "Sin probabilidades, el maximin compara los peores resultados: A = 10 000 y B = 55 000. El criterio conservador elige B."
+      },
+      {
+        id: 19,
+        question: "Una empresa analiza una inversión con dos etapas: decide entrar o no al mercado; si entra, la demanda puede ser alta o baja con probabilidades conocidas y luego puede ampliar o mantener capacidad. ¿Cuál es el procedimiento correcto para resolver el árbol?",
+        options: [
+          "Comenzar desde la raíz izquierda sumando todos los beneficios posibles",
+          "Resolver de derecha a izquierda calculando valores esperados y eligiendo la mejor rama",
+          "Resolver solo los nodos de evento ignorando las decisiones de la segunda etapa",
+          "Elegir primero el escenario de mayor probabilidad sin calcular pagos"
+        ],
+        correct: 1,
+        timeLimit: 50,
+        difficulty: "Difícil",
+        explanation: "El procedimiento establece construir el árbol, colocar alternativas y eventos, asignar probabilidades y resultados, y resolver de derecha a izquierda."
+      },
+      {
+        id: 20,
+        question: "Una empresa compara dos alternativas de inversión: A produce S/ 50 000 o -S/ 10 000, cada resultado con prob. 0,5. B produce S/ 10 000 (0,1), S/ 38 000 (0,4) o S/ 35 000 (0,5). ¿Cuál maximiza el valor esperado?",
+        options: [
+          "A, con VE de S/ 20 000",
+          "B, con VE de S/ 33 700",
+          "A, con VE de S/ 30 000",
+          "B, con VE de S/ 35 000"
+        ],
+        correct: 1,
+        timeLimit: 50,
+        difficulty: "Difícil",
+        explanation: "VE(A) = 0,5(50 000) + 0,5(-10 000) = S/ 20 000. VE(B) = 0,1(10 000) + 0,4(38 000) + 0,5(35 000) = 1 000 + 15 200 + 17 500 = S/ 33 700. B maximiza el valor esperado."
+      }
+    ];
+
+    const MAX_ATTEMPTS = 2;
+
+    // =========================================================================
+    // 2. ESTADO GLOBAL Y CONFIGURACIÓN EN TIEMPO REAL
+    // =========================================================================
+    let db = null;
+    let auth = null;
+    let currentUser = null;
+    let cloudEnabled = false;
+    const appId = typeof __app_id !== "undefined" ? __app_id : "quiz-toma-decisiones-default";
+
+    // Mapa en memoria de todos los participantes sincronizados (clave = código normalizado)
+    let participantsMap = new Map();
+    let simulatedBots = [];
+    let simulationEnabled = false;
+    let sheetsWebhookUrl = "";
+
+    // Estado del estudiante activo en esta pantalla
+    let currentStudent = null; // { codeKey, codeDisplay, name, attemptNumber }
+    let currentIndex = 0;
+    let score = 0;
+    let totalTime = 0;
+    let timerInterval = null;
+    let questionStartTime = 0;
+    let answeredCurrent = false;
+    let liveTab = "top"; // 'top' | 'all'
+
+    // =========================================================================
+    // 3. CÓDIGO GOOGLE APPS SCRIPT PARA EL CONTROL DE NOTAS EN GOOGLE SHEETS
+    // =========================================================================
+    const GOOGLE_APPS_SCRIPT_TEMPLATE = `function doPost(e) {
+  try {
+    var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+    var data = JSON.parse(e.postData.contents);
+
+    // Crear encabezados si la hoja está vacía
+    if (sheet.getLastRow() === 0) {
+      sheet.appendRow([
+        "Última Actualización",
+        "Código",
+        "Estudiante",
+        "Intento 1",
+        "Intento 2",
+        "NOTA MÁXIMA (Considerada)",
+        "Mejor Tiempo (s)",
+        "Criterio de Evaluación"
+      ]);
+      sheet.getRange(1, 1, 1, 8).setFontWeight("bold").setBackground("#1e293b").setFontColor("#ffffff");
+    }
+
+    var rows = sheet.getDataRange().getValues();
+    var targetRow = -1;
+    var codeKey = String(data.code || "").trim().toUpperCase();
+
+    // Buscar si el estudiante ya tiene fila registrada
+    for (var i = 1; i < rows.length; i++) {
+      if (String(rows[i][1]).trim().toUpperCase() === codeKey) {
+        targetRow = i + 1;
+        break;
+      }
+    }
+
+    var now = new Date();
+    var att1 = data.attempt1 !== null && data.attempt1 !== undefined ? Number(data.attempt1) : "";
+    var att2 = data.attempt2 !== null && data.attempt2 !== undefined ? Number(data.attempt2) : "";
+    var bestTime = Number(data.bestTime || 0).toFixed(1);
+    var criterio = "Se considera la NOTA MÁXIMA de hasta 2 intentos";
+
+    if (targetRow === -1) {
+      var newRow = sheet.getLastRow() + 1;
+      sheet.appendRow([now, data.code, data.name, att1, att2, "", bestTime, criterio]);
+      // Fórmula dinámica en Google Sheets que garantiza la nota máxima
+      sheet.getRange(newRow, 6).setFormula("=MAX(D" + newRow + ":E" + newRow + ")");
+    } else {
+      sheet.getRange(targetRow, 1).setValue(now);
+      sheet.getRange(targetRow, 3).setValue(data.name);
+      if (att1 !== "") sheet.getRange(targetRow, 4).setValue(att1);
+      if (att2 !== "") sheet.getRange(targetRow, 5).setValue(att2);
+      sheet.getRange(targetRow, 6).setFormula("=MAX(D" + targetRow + ":E" + targetRow + ")");
+      sheet.getRange(targetRow, 7).setValue(bestTime);
+      sheet.getRange(targetRow, 8).setValue(criterio);
+    }
+
+    return ContentService
+      .createTextOutput(JSON.stringify({ status: "ok" }))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return ContentService
+      .createTextOutput(JSON.stringify({ status: "error", message: err.toString() }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}`;
+
+    // =========================================================================
+    // 4. INICIALIZACIÓN DE CONEXIÓN EN LA NUBE (TIEMPO REAL)
+    // =========================================================================
+    async function initCloudSync() {
+      document.getElementById("appsScriptCode").value = GOOGLE_APPS_SCRIPT_TEMPLATE;
+
+      try {
+        if (typeof __firebase_config === "undefined" || !__firebase_config) {
+          setSyncStatus("local", "Modo Local");
+          return;
+        }
+
+        const firebaseConfig = JSON.parse(__firebase_config);
+        const app = initializeApp(firebaseConfig);
+        auth = getAuth(app);
+        db = getFirestore(app);
+
+        // Regla obligatoria: autenticar primero antes de cualquier consulta
+        if (typeof __initial_auth_token !== "undefined" && __initial_auth_token) {
+          const cred = await signInWithCustomToken(auth, __initial_auth_token);
+          currentUser = cred.user;
+        } else {
+          const cred = await signInAnonymously(auth);
+          currentUser = cred.user;
+        }
+
+        if (!currentUser) {
+          setSyncStatus("local", "Modo Local");
+          return;
+        }
+
+        cloudEnabled = true;
+        setSyncStatus("online", "En vivo (Nube)");
+
+        // Suscripción en tiempo real a todos los participantes (50+ simultáneos)
+        const participantsRef = collection(db, "artifacts", appId, "public", "data", "quiz_participants");
+        onSnapshot(
+          participantsRef,
+          (snapshot) => {
+            participantsMap.clear();
+            snapshot.forEach((docSnap) => {
+              const data = docSnap.data();
+              if (data && data.codeKey) {
+                participantsMap.set(data.codeKey, data);
+              }
+            });
+            refreshAllViews();
+          },
+          (error) => {
+            console.error("Error en sincronización de participantes:", error);
+            showToast("Aviso: No se pudo sincronizar el ranking en tiempo real.", "amber");
+          }
+        );
+
+        // Suscripción en tiempo real a la configuración de Google Sheets compartida
+        const configRef = doc(db, "artifacts", appId, "public", "data", "quiz_settings", "sheets_config");
+        onSnapshot(
+          configRef,
+          (docSnap) => {
+            if (docSnap.exists()) {
+              const cfg = docSnap.data();
+              sheetsWebhookUrl = cfg.webhookUrl || "";
+              const inputEl = document.getElementById("sheetsWebhookUrl");
+              if (inputEl && document.activeElement !== inputEl) {
+                inputEl.value = sheetsWebhookUrl;
+              }
+            }
+          },
+          (error) => {
+            console.error("Error leyendo configuración de Sheets:", error);
+          }
+        );
+      } catch (err) {
+        console.error("Error inicializando nube:", err);
+        setSyncStatus("local", "Modo Local");
+      }
+    }
+
+    function setSyncStatus(mode, text) {
+      const dot = document.getElementById("syncDot");
+      const label = document.getElementById("syncText");
+      label.textContent = text;
+      if (mode === "online") {
+        dot.className = "w-2 h-2 rounded-full bg-emerald-400";
+      } else {
+        dot.className = "w-2 h-2 rounded-full bg-amber-400";
+      }
+    }
+
+    // Guardar o actualizar el estado de un estudiante en tiempo real
+    async function persistParticipantRecord(record) {
+      participantsMap.set(record.codeKey, record);
+      refreshAllViews();
+
+      if (cloudEnabled && db && currentUser) {
+        try {
+          const ref = doc(db, "artifacts", appId, "public", "data", "quiz_participants", record.codeKey);
+          await setDoc(ref, record);
+        } catch (err) {
+          console.error("Error guardando progreso en la nube:", err);
+        }
+      }
+    }
+
+    // =========================================================================
+    // 5. UTILIDADES DE IDENTIFICACIÓN, INTENTOS Y CÁLCULO DE NOTA MÁXIMA
+    // =========================================================================
+    function normalizeCode(raw) {
+      return raw.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, "_");
+    }
+
+    function computeBestStats(attemptsArray) {
+      if (!attemptsArray || attemptsArray.length === 0) {
+        return { maxScore: 0, bestTime: 0 };
+      }
+      // Mejor intento = mayor nota; en caso de empate en nota, menor tiempo
+      let best = attemptsArray[0];
+      for (const att of attemptsArray) {
+        if (att.score > best.score || (att.score === best.score && att.time < best.time)) {
+          best = att;
+        }
+      }
+      return { maxScore: best.score, bestTime: Number(best.time.toFixed(1)) };
+    }
+
+    // Ordenamiento del ranking: Mayor Nota (en vivo o máxima oficial) -> Menor Tiempo Total
+    function getSortedParticipants() {
+      let list = Array.from(participantsMap.values());
+      if (simulationEnabled) {
+        list = list.concat(simulatedBots);
+      }
+
+      return list.sort((a, b) => {
+        // Si el estudiante está en curso y aún no tiene intentos previos, usamos su puntaje en vivo
+        const scoreA = a.attemptsCount > 0 ? Math.max(a.maxScore || 0, a.status === "En curso" ? (a.liveScore || 0) : 0) : (a.liveScore || 0);
+        const scoreB = b.attemptsCount > 0 ? Math.max(b.maxScore || 0, b.status === "En curso" ? (b.liveScore || 0) : 0) : (b.liveScore || 0);
+
+        if (scoreB !== scoreA) return scoreB - scoreA;
+
+        const timeA = a.status === "Finalizado" ? (a.bestTime || a.liveTime || 0) : (a.liveTime || 0);
+        const timeB = b.status === "Finalizado" ? (b.bestTime || b.liveTime || 0) : (b.liveTime || 0);
+        return timeA - timeB;
+      });
+    }
+
+    // =========================================================================
+    // 6. PANTALLA DE INICIO Y VALIDACIÓN DE HASTA 3 INTENTOS
+    // =========================================================================
+    window.previewStudentAttempts = function () {
+      const codeRaw = document.getElementById("studentCode").value.trim();
+      const banner = document.getElementById("attemptStatusBanner");
+      const btn = document.getElementById("btnStartQuiz");
+
+      if (!codeRaw) {
+        banner.classList.add("hidden");
+        btn.disabled = false;
+        btn.textContent = "Comenzar Intento 1 de 2 →";
+        return;
+      }
+
+      const codeKey = normalizeCode(codeRaw);
+      const existing = participantsMap.get(codeKey);
+
+      if (!existing || !existing.attempts || existing.attempts.length === 0) {
+        banner.classList.add("hidden");
+        btn.disabled = false;
+        btn.textContent = "Comenzar Intento 1 de 2 →";
+        return;
+      }
+
+      // Autocompletar nombre si ya existía
+      const nameInput = document.getElementById("studentName");
+      if (!nameInput.value.trim() && existing.name) {
+        nameInput.value = existing.name;
+      }
+
+      const used = existing.attempts.length;
+      banner.classList.remove("hidden");
+
+      if (used >= MAX_ATTEMPTS) {
+        banner.className = "p-3.5 rounded-xl border text-xs sm:text-sm bg-rose-950/40 border-rose-500/40 text-rose-200";
+        banner.innerHTML = `
+          <strong>Límite alcanzado (2/2 intentos):</strong> Ya completaste tus 2 intentos permitidos.
+          Tu <strong>Nota Máxima Oficial</strong> registrada es <span class="text-emerald-400 font-extrabold">${existing.maxScore} / 20</span>
+          (Mejor tiempo: ${Number(existing.bestTime).toFixed(1)}s).
+        `;
+        btn.disabled = true;
+        btn.textContent = "Has completado tus 2 intentos";
+      } else {
+        banner.className = "p-3.5 rounded-xl border text-xs sm:text-sm bg-emerald-950/30 border-emerald-500/40 text-emerald-200";
+        banner.innerHTML = `
+          <strong>Historial encontrado:</strong> Llevas <strong>${used} de ${MAX_ATTEMPTS}</strong> intentos.
+          Tu nota máxima actual es <span class="font-extrabold text-emerald-400">${existing.maxScore} / 20</span>.
+          Si mejoras tu puntaje en el intento ${used + 1}, se actualizará tu nota oficial.
+        `;
+        btn.disabled = false;
+        btn.textContent = `Comenzar Intento ${used + 1} de ${MAX_ATTEMPTS} →`;
+      }
+    };
+
+    window.handleStartSubmit = async function (e) {
+      e.preventDefault();
+      const codeRaw = document.getElementById("studentCode").value.trim();
+      const nameRaw = document.getElementById("studentName").value.trim();
+      if (!codeRaw || !nameRaw) return;
+
+      const codeKey = normalizeCode(codeRaw);
+      const existing = participantsMap.get(codeKey);
+      const attempts = existing?.attempts ? [...existing.attempts] : [];
+
+      if (attempts.length >= MAX_ATTEMPTS) {
+        showToast("Ya utilizaste tus 2 intentos permitidos. Se conserva tu nota máxima.", "rose");
+        return;
+      }
+
+      const nextAttemptNumber = attempts.length + 1;
+      currentStudent = {
+        codeKey,
+        codeDisplay: codeRaw.toUpperCase(),
+        name: nameRaw,
+        attemptNumber: nextAttemptNumber
+      };
+
+      currentIndex = 0;
+      score = 0;
+      totalTime = 0;
+      answeredCurrent = false;
+
+      if (simulationEnabled && simulatedBots.length === 0) {
+        generateBots();
+      }
+
+      // Registrar inmediatamente al estudiante como "En curso" para que aparezca en tiempo real
+      const best = computeBestStats(attempts);
+      const record = {
+        codeKey,
+        codeDisplay: currentStudent.codeDisplay,
+        name: currentStudent.name,
+        attempts,
+        attemptsCount: attempts.length,
+        maxScore: best.maxScore,
+        bestTime: best.bestTime,
+        liveScore: 0,
+        liveTime: 0,
+        liveAnswered: 0,
+        currentAttempt: nextAttemptNumber,
+        status: "En curso",
+        updatedAt: Date.now()
+      };
+
+      await persistParticipantRecord(record);
+
+      document.getElementById("screenStart").classList.add("hidden");
+      document.getElementById("screenResult").classList.add("hidden");
+      document.getElementById("screenQuiz").classList.remove("hidden");
+
+      document.getElementById("quizStudentTag").textContent = `${currentStudent.codeDisplay} • ${currentStudent.name}`;
+      document.getElementById("quizAttemptTag").textContent = `Intento ${nextAttemptNumber} de ${MAX_ATTEMPTS}`;
+
+      renderQuestion();
+      refreshAllViews();
+    };
+
+    // =========================================================================
+    // 7. MOTOR DEL QUIZ (40 A 50 SEGUNDOS POR PREGUNTA)
+    // =========================================================================
+    function renderQuestion() {
+      const q = QUESTIONS[currentIndex];
+      answeredCurrent = false;
+
+      document.getElementById("qCounter").textContent = `Pregunta ${currentIndex + 1} / ${QUESTIONS.length}`;
+      document.getElementById("liveScore").textContent = score;
+      document.getElementById("liveTotalTime").textContent = `${totalTime.toFixed(1)}s`;
+
+      const diffEl = document.getElementById("qDifficulty");
+      diffEl.textContent = `${q.difficulty} • ${q.timeLimit}s`;
+      if (q.difficulty === "Fácil") {
+        diffEl.className = "px-2.5 py-1 rounded-lg text-xs font-bold uppercase tracking-wider bg-emerald-500/15 text-emerald-300 border border-emerald-500/30";
+      } else if (q.difficulty === "Media") {
+        diffEl.className = "px-2.5 py-1 rounded-lg text-xs font-bold uppercase tracking-wider bg-amber-500/15 text-amber-300 border border-amber-500/30";
+      } else {
+        diffEl.className = "px-2.5 py-1 rounded-lg text-xs font-bold uppercase tracking-wider bg-rose-500/15 text-rose-300 border border-rose-500/30";
+      }
+
+      document.getElementById("questionText").textContent = q.question;
+      document.getElementById("feedbackBox").classList.add("hidden");
+
+      const letters = ["A", "B", "C", "D"];
+      const container = document.getElementById("optionsContainer");
+      container.innerHTML = "";
+
+      q.options.forEach((optText, idx) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.id = `opt_${idx}`;
+        btn.onclick = () => selectOption(idx);
+        btn.className = "w-full text-left p-4 rounded-xl bg-slate-800/70 hover:bg-slate-800 border border-slate-700 hover:border-indigo-500/70 transition flex items-start gap-3.5 group";
+        btn.innerHTML = `
+          <span class="w-7 h-7 rounded-lg bg-slate-900 border border-slate-700 group-hover:border-indigo-500 text-slate-300 font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">
+            ${letters[idx]}
+          </span>
+          <span class="text-sm sm:text-base text-slate-100 leading-snug">${optText}</span>
+        `;
+        container.appendChild(btn);
+      });
+
+      startTimer(q.timeLimit);
+    }
+
+    function startTimer(limitSeconds) {
+      clearInterval(timerInterval);
+      questionStartTime = performance.now();
+      const timerDisplay = document.getElementById("timerDisplay");
+      const timerBar = document.getElementById("timerBar");
+
+      timerBar.style.width = "100%";
+      timerBar.className = "h-full bg-indigo-500 timer-bar-transition";
+      timerDisplay.textContent = `${limitSeconds.toFixed(1)}s`;
+
+      timerInterval = setInterval(() => {
+        const elapsed = (performance.now() - questionStartTime) / 1000;
+        const remaining = Math.max(0, limitSeconds - elapsed);
+        const pct = (remaining / limitSeconds) * 100;
+
+        timerDisplay.textContent = `${remaining.toFixed(1)}s`;
+        timerBar.style.width = `${pct}%`;
+
+        if (pct <= 25) {
+          timerBar.className = "h-full bg-rose-500 timer-bar-transition";
+          timerDisplay.className = "px-3 py-1 rounded-lg bg-rose-600/20 border border-rose-500/50 font-mono font-extrabold text-lg text-rose-300 min-w-[78px] text-center";
+        } else if (pct <= 55) {
+          timerBar.className = "h-full bg-amber-500 timer-bar-transition";
+          timerDisplay.className = "px-3 py-1 rounded-lg bg-amber-600/20 border border-amber-500/50 font-mono font-extrabold text-lg text-amber-300 min-w-[78px] text-center";
+        } else {
+          timerDisplay.className = "px-3 py-1 rounded-lg bg-indigo-600/20 border border-indigo-500/40 font-mono font-extrabold text-lg text-indigo-300 min-w-[78px] text-center";
+        }
+
+        if (remaining <= 0) {
+          clearInterval(timerInterval);
+          handleTimeout();
+        }
+      }, 50);
+    }
+
+    async function selectOption(selectedIdx) {
+      if (answeredCurrent) return;
+      answeredCurrent = true;
+      clearInterval(timerInterval);
+
+      const q = QUESTIONS[currentIndex];
+      const elapsed = Math.min(q.timeLimit, (performance.now() - questionStartTime) / 1000);
+      totalTime = Number((totalTime + elapsed).toFixed(1));
+
+      const isCorrect = selectedIdx === q.correct;
+      if (isCorrect) score += 1;
+
+      disableAllOptions(selectedIdx, q.correct);
+      showFeedback(isCorrect, false, elapsed, q.explanation);
+      advanceBotsForQuestion(currentIndex);
+      await syncLiveProgress();
+    }
+
+    async function handleTimeout() {
+      if (answeredCurrent) return;
+      answeredCurrent = true;
+
+      const q = QUESTIONS[currentIndex];
+      totalTime = Number((totalTime + q.timeLimit).toFixed(1));
+
+      disableAllOptions(-1, q.correct);
+      showFeedback(false, true, q.timeLimit, q.explanation);
+      advanceBotsForQuestion(currentIndex);
+      await syncLiveProgress();
+    }
+
+    async function syncLiveProgress() {
+      document.getElementById("liveScore").textContent = score;
+      document.getElementById("liveTotalTime").textContent = `${totalTime.toFixed(1)}s`;
+
+      if (!currentStudent) return;
+      const existing = participantsMap.get(currentStudent.codeKey);
+      const attempts = existing?.attempts ? [...existing.attempts] : [];
+      const best = computeBestStats(attempts);
+
+      const record = {
+        codeKey: currentStudent.codeKey,
+        codeDisplay: currentStudent.codeDisplay,
+        name: currentStudent.name,
+        attempts,
+        attemptsCount: attempts.length,
+        maxScore: best.maxScore,
+        bestTime: best.bestTime,
+        liveScore: score,
+        liveTime: totalTime,
+        liveAnswered: currentIndex + 1,
+        currentAttempt: currentStudent.attemptNumber,
+        status: "En curso",
+        updatedAt: Date.now()
+      };
+
+      await persistParticipantRecord(record);
+    }
+
+    function disableAllOptions(selectedIdx, correctIdx) {
+      for (let i = 0; i < 4; i++) {
+        const btn = document.getElementById(`opt_${i}`);
+        if (!btn) continue;
+        btn.disabled = true;
+        btn.classList.remove("hover:bg-slate-800", "hover:border-indigo-500/70");
+
+        if (i === correctIdx) {
+          btn.className = "w-full text-left p-4 rounded-xl bg-emerald-500/20 border-2 border-emerald-500 flex items-start gap-3.5";
+        } else if (i === selectedIdx) {
+          btn.className = "w-full text-left p-4 rounded-xl bg-rose-500/20 border-2 border-rose-500 flex items-start gap-3.5";
+        } else {
+          btn.className = "w-full text-left p-4 rounded-xl bg-slate-900/50 border border-slate-800 opacity-50 flex items-start gap-3.5";
+        }
+      }
+    }
+
+    function showFeedback(isCorrect, isTimeout, elapsed, explanation) {
+      const box = document.getElementById("feedbackBox");
+      const title = document.getElementById("feedbackTitle");
+      const text = document.getElementById("feedbackText");
+      const timeBadge = document.getElementById("feedbackTimeUsed");
+      const btnNext = document.getElementById("btnNext");
+
+      box.classList.remove("hidden");
+      timeBadge.textContent = `⏱ ${elapsed.toFixed(1)}s`;
+      text.textContent = explanation;
+      btnNext.textContent = currentIndex === QUESTIONS.length - 1
+        ? "Finalizar y Ver Ranking General 🏆"
+        : "Siguiente pregunta →";
+
+      if (isCorrect) {
+        box.className = "mt-6 p-4 rounded-xl border bg-emerald-950/40 border-emerald-500/40 fade-in";
+        title.className = "font-bold text-sm mb-1 text-emerald-400";
+        title.textContent = "✅ ¡Respuesta correcta!";
+      } else if (isTimeout) {
+        box.className = "mt-6 p-4 rounded-xl border bg-amber-950/40 border-amber-500/40 fade-in";
+        title.className = "font-bold text-sm mb-1 text-amber-400";
+        title.textContent = "⏳ ¡Tiempo agotado!";
+      } else {
+        box.className = "mt-6 p-4 rounded-xl border bg-rose-950/40 border-rose-500/40 fade-in";
+        title.className = "font-bold text-sm mb-1 text-rose-400";
+        title.textContent = "❌ Respuesta incorrecta";
+      }
+    }
+
+    window.nextQuestion = function () {
+      if (currentIndex < QUESTIONS.length - 1) {
+        currentIndex += 1;
+        renderQuestion();
+      } else {
+        finishQuiz();
+      }
+    };
+
+    // =========================================================================
+    // 8. FINALIZACIÓN DEL INTENTO Y ENVÍO A GOOGLE SHEETS
+    // =========================================================================
+    async function finishQuiz() {
+      clearInterval(timerInterval);
+
+      const existing = participantsMap.get(currentStudent.codeKey);
+      const attempts = existing?.attempts ? [...existing.attempts] : [];
+
+      attempts.push({
+        attempt: currentStudent.attemptNumber,
+        score,
+        time: Number(totalTime.toFixed(1)),
+        finishedAt: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+      });
+
+      const best = computeBestStats(attempts);
+      const finalRecord = {
+        codeKey: currentStudent.codeKey,
+        codeDisplay: currentStudent.codeDisplay,
+        name: currentStudent.name,
+        attempts,
+        attemptsCount: attempts.length,
+        maxScore: best.maxScore,
+        bestTime: best.bestTime,
+        liveScore: score,
+        liveTime: Number(totalTime.toFixed(1)),
+        liveAnswered: QUESTIONS.length,
+        currentAttempt: attempts.length,
+        status: "Finalizado",
+        updatedAt: Date.now()
+      };
+
+      await persistParticipantRecord(finalRecord);
+
+      // Enviar automáticamente a Google Sheets si el docente configuró el enlace
+      await sendResultToGoogleSheets(finalRecord);
+
+      // Mostrar pantalla de resultados
+      document.getElementById("screenQuiz").classList.add("hidden");
+      document.getElementById("screenResult").classList.remove("hidden");
+
+      const sorted = getSortedParticipants();
+      const myPos = sorted.findIndex((p) => p.codeKey === currentStudent.codeKey) + 1;
+
+      document.getElementById("resultStudentLabel").textContent = `${finalRecord.codeDisplay} — ${finalRecord.name} (Intento ${finalRecord.attemptsCount} de ${MAX_ATTEMPTS})`;
+      document.getElementById("resScore").textContent = `${score} / 20`;
+      document.getElementById("resMaxScore").textContent = `${finalRecord.maxScore} / 20`;
+      document.getElementById("resTime").textContent = `${finalRecord.liveTime.toFixed(1)}s`;
+      document.getElementById("resAttempts").textContent = `${finalRecord.attemptsCount} / ${MAX_ATTEMPTS}`;
+      document.getElementById("resRank").textContent = `#${myPos} de ${sorted.length}`;
+
+      const retryBtn = document.getElementById("btnRetryAttempt");
+      if (finalRecord.attemptsCount >= MAX_ATTEMPTS) {
+        retryBtn.classList.add("hidden");
+      } else {
+        retryBtn.classList.remove("hidden");
+        retryBtn.textContent = `🔄 Realizar Intento ${finalRecord.attemptsCount + 1} de ${MAX_ATTEMPTS}`;
+      }
+
+      refreshAllViews();
+    }
+
+    async function sendResultToGoogleSheets(record) {
+      const statusBox = document.getElementById("sheetsSyncStatus");
+      if (!sheetsWebhookUrl) {
+        statusBox.classList.remove("hidden");
+        statusBox.className = "max-w-lg mx-auto mb-5 px-4 py-2 rounded-xl text-xs font-medium border bg-slate-800/70 border-slate-700 text-slate-300";
+        statusBox.textContent = "ℹ️ Nota guardada en el ranking en vivo. Configura el botón 'Google Sheets' para envío automático a la hoja de cálculo.";
+        return;
+      }
+
+      statusBox.classList.remove("hidden");
+      statusBox.className = "max-w-lg mx-auto mb-5 px-4 py-2 rounded-xl text-xs font-medium border bg-indigo-950/50 border-indigo-500/40 text-indigo-200";
+      statusBox.textContent = "⏳ Enviando calificación e historial de intentos a Google Sheets...";
+
+      const payload = {
+        code: record.codeDisplay,
+        name: record.name,
+        attempt1: record.attempts[0] ? record.attempts[0].score : null,
+        attempt2: record.attempts[1] ? record.attempts[1].score : null,
+        maxScore: record.maxScore,
+        bestTime: record.bestTime
+      };
+
+      try {
+        // mode: 'no-cors' permite el envío directo a Google Apps Script sin bloqueo CORS en el navegador
+        await fetch(sheetsWebhookUrl, {
+          method: "POST",
+          mode: "no-cors",
+          headers: { "Content-Type": "text/plain;charset=utf-8" },
+          body: JSON.stringify(payload)
+        });
+        statusBox.className = "max-w-lg mx-auto mb-5 px-4 py-2 rounded-xl text-xs font-medium border bg-emerald-950/40 border-emerald-500/40 text-emerald-300";
+        statusBox.textContent = `✅ Enviado a Google Sheets correctamente (Nota Máxima Considerada: ${record.maxScore}/20).`;
+      } catch (err) {
+        console.error("Error enviando a Google Sheets:", err);
+        statusBox.className = "max-w-lg mx-auto mb-5 px-4 py-2 rounded-xl text-xs font-medium border bg-amber-950/40 border-amber-500/40 text-amber-300";
+        statusBox.textContent = "⚠️ No se pudo conectar con Google Sheets. Puedes exportar las notas con el botón CSV.";
+      }
+    }
+
+    // =========================================================================
+    // 9. RENDERIZADO EN TIEMPO REAL DE TODAS LAS VISTAS DE RANKING
+    // =========================================================================
+    function refreshAllViews() {
+      const sorted = getSortedParticipants();
+      document.getElementById("onlineCountBadge").textContent = `👥 ${sorted.length} participantes registrados`;
+      document.getElementById("liveTotalParticipants").textContent = sorted.length;
+      document.getElementById("finalTotalCount").textContent = sorted.length;
+
+      renderLiveSidebar(sorted);
+      renderPodium(sorted);
+      renderFinalRankingTable(sorted);
+      renderTeacherModal(sorted);
+    }
+
+    window.setLiveTab = function (tab) {
+      liveTab = tab;
+      const tabTop = document.getElementById("tabTop");
+      const tabAll = document.getElementById("tabAll");
+      if (tab === "top") {
+        tabTop.className = "px-2.5 py-1 rounded-md bg-indigo-600 text-white font-semibold transition";
+        tabAll.className = "px-2.5 py-1 rounded-md text-slate-400 hover:text-white transition";
+      } else {
+        tabAll.className = "px-2.5 py-1 rounded-md bg-indigo-600 text-white font-semibold transition";
+        tabTop.className = "px-2.5 py-1 rounded-md text-slate-400 hover:text-white transition";
+      }
+      renderLiveSidebar(getSortedParticipants());
+    };
+
+    function renderLiveSidebar(sorted) {
+      const listEl = document.getElementById("liveRankingList");
+      const posBanner = document.getElementById("liveMyPositionBanner");
+
+      if (currentStudent) {
+        const myIdx = sorted.findIndex((p) => p.codeKey === currentStudent.codeKey);
+        if (myIdx !== -1) {
+          posBanner.textContent = `Tu posición actual: #${myIdx + 1} de ${sorted.length}`;
+        }
+      }
+
+      if (sorted.length === 0) {
+        listEl.innerHTML = `<p class="text-xs text-slate-500 text-center py-6">Esperando participantes...</p>`;
+        return;
+      }
+
+      const slice = liveTab === "top" ? sorted.slice(0, 15) : sorted;
+
+      listEl.innerHTML = slice.map((entry, idx) => {
+        const medal = idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : `${idx + 1}.`;
+        const isMe = currentStudent && entry.codeKey === currentStudent.codeKey;
+        const displayScore = entry.attemptsCount > 0 ? Math.max(entry.maxScore, entry.status === "En curso" ? entry.liveScore : 0) : entry.liveScore;
+        const displayTime = entry.status === "Finalizado" ? (entry.bestTime || entry.liveTime || 0) : (entry.liveTime || 0);
+        const progressText = entry.status === "En curso" ? `P.${entry.liveAnswered || 0}/20` : "Fin";
+
+        const highlight = isMe
+          ? "bg-indigo-600/25 border-indigo-500/70 text-white shadow-sm"
+          : "bg-slate-800/50 border-slate-800 text-slate-300";
+
+        return `
+          <div class="flex items-center justify-between px-3 py-2 rounded-lg border text-xs ${highlight}">
+            <div class="flex items-center gap-2 min-w-0">
+              <span class="font-bold w-6 text-center shrink-0">${medal}</span>
+              <div class="min-w-0">
+                <div class="truncate font-medium">${entry.name} ${isMe ? "(Tú)" : ""}</div>
+                <div class="text-[10px] text-slate-400">${progressText} • Int. ${entry.currentAttempt || entry.attemptsCount || 1}/${MAX_ATTEMPTS}</div>
+              </div>
+            </div>
+            <div class="flex items-center gap-2 shrink-0 font-mono">
+              <span class="text-emerald-400 font-bold">${displayScore}/20</span>
+              <span class="text-sky-400 text-[11px]">${Number(displayTime).toFixed(1)}s</span>
+            </div>
+          </div>
+        `;
+      }).join("");
+    }
+
+    function renderPodium(sorted) {
+      const container = document.getElementById("podiumCards");
+      const top3 = sorted.slice(0, 3);
+      if (top3.length === 0) {
+        container.innerHTML = `<p class="text-xs text-slate-500 col-span-3 text-center py-4">Aún no hay participantes en el podio.</p>`;
+        return;
+      }
+
+      const styles = [
+        { medal: "🥇 1.° Lugar", border: "border-amber-500/50 bg-amber-950/20", text: "text-amber-300" },
+        { medal: "🥈 2.° Lugar", border: "border-slate-400/40 bg-slate-800/40", text: "text-slate-200" },
+        { medal: "🥉 3.° Lugar", border: "border-orange-500/40 bg-orange-950/20", text: "text-orange-300" }
+      ];
+
+      container.innerHTML = top3.map((entry, idx) => {
+        const st = styles[idx];
+        const bestScore = entry.attemptsCount > 0 ? entry.maxScore : entry.liveScore;
+        const bestTime = entry.status === "Finalizado" ? (entry.bestTime || entry.liveTime || 0) : (entry.liveTime || 0);
+        return `
+          <div class="rounded-xl border p-4 ${st.border} flex flex-col justify-between">
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-xs font-extrabold uppercase ${st.text}">${st.medal}</span>
+              <span class="text-[11px] font-mono text-slate-400">${entry.codeDisplay || ""}</span>
+            </div>
+            <div class="font-bold text-base text-white truncate mb-2">${entry.name}</div>
+            <div class="flex items-center justify-between text-xs pt-2 border-t border-slate-800/80">
+              <span class="text-emerald-400 font-extrabold text-sm">Nota: ${bestScore} / 20</span>
+              <span class="text-sky-400 font-mono">⏱ ${Number(bestTime).toFixed(1)}s</span>
+            </div>
+          </div>
+        `;
+      }).join("");
+    }
+
+    window.renderFinalRankingTable = function (preSorted) {
+      const sorted = preSorted || getSortedParticipants();
+      const query = (document.getElementById("searchFinalTable")?.value || "").trim().toLowerCase();
+      const tbody = document.getElementById("finalRankingTable");
+
+      const filtered = query
+        ? sorted.filter((e) => e.name.toLowerCase().includes(query) || (e.codeDisplay || "").toLowerCase().includes(query))
+        : sorted;
+
+      if (filtered.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="8" class="py-6 text-center text-slate-500">No se encontraron participantes.</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = filtered.map((entry) => {
+        const realRank = sorted.findIndex((p) => p.codeKey === entry.codeKey) + 1;
+        const medal = realRank === 1 ? "🥇 1.°" : realRank === 2 ? "🥈 2.°" : realRank === 3 ? "🥉 3.°" : `${realRank}.°`;
+        const isMe = currentStudent && entry.codeKey === currentStudent.codeKey;
+        const rowClass = isMe ? "bg-indigo-600/20 text-white font-semibold" : "text-slate-300";
+
+        const a1 = entry.attempts?.[0] ? `${entry.attempts[0].score}` : "—";
+        const a2 = entry.attempts?.[1] ? `${entry.attempts[1].score}` : "—";
+        const officialScore = entry.attemptsCount > 0 ? entry.maxScore : entry.liveScore;
+        const displayTime = entry.status === "Finalizado" ? (entry.bestTime || entry.liveTime || 0) : (entry.liveTime || 0);
+
+        const statusBadge = entry.status === "En curso"
+          ? `<span class="px-2 py-0.5 rounded-full text-[11px] bg-amber-500/20 text-amber-300 border border-amber-500/30">En curso (${entry.liveAnswered || 0}/20)</span>`
+          : entry.isBot
+            ? `<span class="text-[11px] text-slate-500">Simulado</span>`
+            : `<span class="px-2 py-0.5 rounded-full text-[11px] bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">Finalizado</span>`;
+
+        return `
+          <tr class="${rowClass}">
+            <td class="py-2.5 px-3 font-bold">${medal}</td>
+            <td class="py-2.5 px-3 font-mono text-xs text-slate-400">${entry.codeDisplay || "—"}</td>
+            <td class="py-2.5 px-3">${entry.name} ${isMe ? '<span class="text-xs text-indigo-300">(Tú)</span>' : ""}</td>
+            <td class="py-2.5 px-2 text-center font-mono text-xs">${a1}</td>
+            <td class="py-2.5 px-2 text-center font-mono text-xs">${a2}</td>
+            <td class="py-2.5 px-3 text-center font-extrabold text-emerald-400">${officialScore} / 20</td>
+            <td class="py-2.5 px-3 text-right font-mono text-sky-400">${Number(displayTime).toFixed(1)} s</td>
+            <td class="py-2.5 px-3 text-right">${statusBadge}</td>
+          </tr>
+        `;
+      }).join("");
+    };
+
+    function renderTeacherModal(sorted) {
+      const modal = document.getElementById("teacherModal");
+      if (modal.classList.contains("hidden")) return;
+
+      const total = sorted.length;
+      const active = sorted.filter((p) => p.status === "En curso").length;
+      const finished = sorted.filter((p) => p.status === "Finalizado").length;
+      const avg = total > 0
+        ? (sorted.reduce((acc, p) => acc + (p.attemptsCount > 0 ? p.maxScore : (p.liveScore || 0)), 0) / total).toFixed(1)
+        : "0.0";
+
+      document.getElementById("dashTotal").textContent = total;
+      document.getElementById("dashActive").textContent = active;
+      document.getElementById("dashFinished").textContent = finished;
+      document.getElementById("dashAvg").textContent = `${avg} / 20`;
+
+      const tbody = document.getElementById("teacherModalBody");
+      if (total === 0) {
+        tbody.innerHTML = `<tr><td colspan="8" class="py-8 text-center text-slate-500">Aún no hay estudiantes conectados en la sala.</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = sorted.map((entry, idx) => {
+        const medal = idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : `${idx + 1}.`;
+        const a1 = entry.attempts?.[0] ? entry.attempts[0].score : "—";
+        const a2 = entry.attempts?.[1] ? entry.attempts[1].score : "—";
+        const bestScore = entry.attemptsCount > 0 ? entry.maxScore : entry.liveScore;
+        const bestTime = entry.status === "Finalizado" ? (entry.bestTime || entry.liveTime || 0) : (entry.liveTime || 0);
+        const pct = Math.round(((entry.liveAnswered || 0) / QUESTIONS.length) * 100);
+
+        return `
+          <tr class="text-slate-200 hover:bg-slate-800/40">
+            <td class="py-2.5 px-3 font-bold">${medal}</td>
+            <td class="py-2.5 px-3">
+              <div class="font-semibold">${entry.name}</div>
+              <div class="text-[11px] font-mono text-slate-400">${entry.codeDisplay || ""}</div>
+            </td>
+            <td class="py-2.5 px-3">
+              <div class="w-24 mx-auto">
+                <div class="flex justify-between text-[10px] text-slate-400 mb-0.5">
+                  <span>${entry.liveAnswered || 0}/20</span>
+                  <span>${pct}%</span>
+                </div>
+                <div class="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                  <div class="h-full bg-indigo-500" style="width:${pct}%"></div>
+                </div>
+              </div>
+            </td>
+            <td class="py-2.5 px-2 text-center font-mono text-xs">${a1}</td>
+            <td class="py-2.5 px-2 text-center font-mono text-xs">${a2}</td>
+            <td class="py-2.5 px-3 text-center font-extrabold text-emerald-400">${bestScore} / 20</td>
+            <td class="py-2.5 px-3 text-right font-mono text-sky-400">${Number(bestTime).toFixed(1)}s</td>
+            <td class="py-2.5 px-3 text-right">
+              ${entry.status === "En curso"
+                ? `<span class="text-[11px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300">En vivo</span>`
+                : `<span class="text-[11px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300">Terminó</span>`}
+            </td>
+          </tr>
+        `;
+      }).join("");
+    }
+
+    // =========================================================================
+    // 10. SIMULADOR DE AULA SIMULTÁNEA (49 RIVALES = 50 ESTUDIANTES)
+    // =========================================================================
+    window.toggleSimulationMode = function () {
+      simulationEnabled = !simulationEnabled;
+      document.getElementById("simStatus").textContent = simulationEnabled ? "ON" : "OFF";
+      document.getElementById("simStatus").className = simulationEnabled
+        ? "font-bold text-emerald-400"
+        : "font-bold text-amber-400";
+
+      if (simulationEnabled) {
+        generateBots();
+        showToast("Simulación activada: 49 estudiantes simultáneos en vivo.", "emerald");
+      } else {
+        simulatedBots = [];
+        showToast("Simulación desactivada.", "slate");
+      }
+      refreshAllViews();
+    };
+
+    function generateBots() {
+      const firstNames = [
+        "Carlos", "Lucía", "Diego", "Valeria", "Mateo", "Camila", "Sebastián", "Sofía", "Andrés", "Paula",
+        "Joaquín", "Antonella", "Gabriel", "Fernanda", "Nicolás", "Daniela", "Rodrigo", "Isabella", "Martín", "Alejandra",
+        "Renato", "Milagros", "Fabrizio", "Xiomara", "Alonso", "Katerine", "Bruno", "Natalia", "Esteban", "Fiorella",
+        "César", "Ariana", "Leonardo", "Jazmín", "Piero", "Stephany", "Kevin", "Nayeli", "Brayan", "Mayra",
+        "Ángel", "Génesis", "Luis", "Carla", "José", "Rosa", "Marco", "Elena", "Víctor"
+      ];
+      const lastNames = [
+        "Mendoza", "Quispe", "Paredes", "Torres", "Salazar", "Rojas", "Huamán", "Castillo", "Vargas", "Morales",
+        "Flores", "Díaz", "Chávez", "Ríos", "Herrera", "Cruz", "Silva", "Vega", "Lozano", "Ramos"
+      ];
+
+      simulatedBots = firstNames.map((fn, idx) => {
+        const ln = lastNames[idx % lastNames.length];
+        return {
+          codeKey: `SIM_${idx + 1}`,
+          codeDisplay: `2026${String(idx + 101).padStart(4, "0")}`,
+          name: `${ln}, ${fn}`,
+          attempts: [],
+          attemptsCount: 0,
+          maxScore: 0,
+          bestTime: 0,
+          liveScore: 0,
+          liveTime: 0,
+          liveAnswered: 0,
+          currentAttempt: 1,
+          status: "En curso",
+          isBot: true,
+          skill: 0.45 + Math.random() * 0.5,
+          speedFactor: 0.25 + Math.random() * 0.6
+        };
+      });
+    }
+
+    function advanceBotsForQuestion(qIndex) {
+      if (!simulationEnabled) return;
+      const limit = QUESTIONS[qIndex].timeLimit;
+      simulatedBots.forEach((bot) => {
+        if (bot.liveAnswered <= qIndex) {
+          const isCorrect = Math.random() < bot.skill;
+          const t = Number(Math.min(limit, Math.max(4.5, limit * bot.speedFactor * (0.7 + Math.random() * 0.5))).toFixed(1));
+          if (isCorrect) bot.liveScore += 1;
+          bot.liveTime = Number((bot.liveTime + t).toFixed(1));
+          bot.liveAnswered = qIndex + 1;
+
+          if (bot.liveAnswered === QUESTIONS.length) {
+            bot.status = "Finalizado";
+            bot.attempts = [{ attempt: 1, score: bot.liveScore, time: bot.liveTime }];
+            bot.attemptsCount = 1;
+            bot.maxScore = bot.liveScore;
+            bot.bestTime = bot.liveTime;
+          }
+        }
+      });
+    }
+
+    // =========================================================================
+    // 11. ACCIONES DE INTERFAZ, MODALES, GOOGLE SHEETS Y EXPORTACIÓN CSV
+    // =========================================================================
+    window.startAnotherAttempt = function () {
+      if (!currentStudent) return;
+      document.getElementById("studentCode").value = currentStudent.codeDisplay;
+      document.getElementById("studentName").value = currentStudent.name;
+      document.getElementById("screenResult").classList.add("hidden");
+      document.getElementById("screenStart").classList.remove("hidden");
+      window.previewStudentAttempts();
+    };
+
+    window.resetToStartScreen = function () {
+      currentStudent = null;
+      document.getElementById("studentCode").value = "";
+      document.getElementById("studentName").value = "";
+      document.getElementById("attemptStatusBanner").classList.add("hidden");
+      document.getElementById("btnStartQuiz").disabled = false;
+      document.getElementById("btnStartQuiz").textContent = "Comenzar Intento 1 de 2 →";
+      document.getElementById("screenResult").classList.add("hidden");
+      document.getElementById("screenQuiz").classList.add("hidden");
+      document.getElementById("screenStart").classList.remove("hidden");
+    };
+
+    window.openTeacherDashboard = function () {
+      document.getElementById("teacherModal").classList.remove("hidden");
+      renderTeacherModal(getSortedParticipants());
+    };
+
+    window.closeTeacherDashboard = function () {
+      document.getElementById("teacherModal").classList.add("hidden");
+    };
+
+    window.openSheetsModal = function () {
+      document.getElementById("sheetsWebhookUrl").value = sheetsWebhookUrl;
+      document.getElementById("sheetsModal").classList.remove("hidden");
+    };
+
+    window.closeSheetsModal = function () {
+      document.getElementById("sheetsModal").classList.add("hidden");
+    };
+
+    window.saveSheetsUrl = async function () {
+      const url = document.getElementById("sheetsWebhookUrl").value.trim();
+      sheetsWebhookUrl = url;
+
+      if (cloudEnabled && db && currentUser) {
+        try {
+          const configRef = doc(db, "artifacts", appId, "public", "data", "quiz_settings", "sheets_config");
+          await setDoc(configRef, { webhookUrl: url, updatedAt: Date.now() });
+          showToast("Enlace de Google Sheets guardado y sincronizado para todos los estudiantes.", "emerald");
+        } catch (err) {
+          console.error("Error guardando URL de Sheets:", err);
+          showToast("Guardado en esta sesión (error al sincronizar configuración).", "amber");
+        }
+      } else {
+        showToast("Enlace de Google Sheets guardado para esta sesión.", "emerald");
+      }
+      window.closeSheetsModal();
+    };
+
+    window.copyAppsScriptCode = function () {
+      const textarea = document.getElementById("appsScriptCode");
+      textarea.select();
+      textarea.setSelectionRange(0, 99999);
+      try {
+        document.execCommand("copy");
+        showToast("Código de Google Apps Script copiado al portapapeles.", "emerald");
+      } catch {
+        showToast("Selecciona el texto y cópialo manualmente (Ctrl+C).", "amber");
+      }
+    };
+
+    window.openClearConfirmModal = function () {
+      document.getElementById("confirmModal").classList.remove("hidden");
+    };
+
+    window.closeClearConfirmModal = function () {
+      document.getElementById("confirmModal").classList.add("hidden");
+    };
+
+    window.executeClearRoom = async function () {
+      window.closeClearConfirmModal();
+      participantsMap.clear();
+      simulatedBots = [];
+
+      if (cloudEnabled && db && currentUser) {
+        try {
+          const ref = collection(db, "artifacts", appId, "public", "data", "quiz_participants");
+          const snap = await getDocs(ref);
+          const deletions = [];
+          snap.forEach((d) => deletions.push(deleteDoc(d.ref)));
+          await Promise.all(deletions);
+          showToast("Sala reiniciada correctamente en tiempo real.", "emerald");
+        } catch (err) {
+          console.error("Error limpiando sala:", err);
+          showToast("No se pudieron borrar algunos registros remotos.", "rose");
+        }
+      } else {
+        showToast("Ranking local reiniciado.", "emerald");
+      }
+      refreshAllViews();
+    };
+
+    window.exportFullRankingCSV = function () {
+      const sorted = getSortedParticipants();
+      if (sorted.length === 0) {
+        showToast("Aún no hay participantes para exportar.", "amber");
+        return;
+      }
+
+      // BOM UTF-8 para que Excel y Google Sheets reconozcan tildes correctamente
+      let csv = "\uFEFFPuesto,Código,Estudiante,Intento 1,Intento 2,NOTA MÁXIMA (Considerada),Mejor Tiempo (s),Criterio\n";
+      sorted.forEach((r, i) => {
+        const a1 = r.attempts?.[0] ? r.attempts[0].score : "";
+        const a2 = r.attempts?.[1] ? r.attempts[1].score : "";
+        const official = r.attemptsCount > 0 ? r.maxScore : r.liveScore;
+        const bestTime = r.status === "Finalizado" ? (r.bestTime || r.liveTime || 0) : (r.liveTime || 0);
+        csv += `${i + 1},"${(r.codeDisplay || "").replace(/"/g, '""')}","${r.name.replace(/"/g, '""')}",${a1},${a2},${official},${Number(bestTime).toFixed(1)},"Se considera la nota máxima de hasta 2 intentos"\n`;
+      });
+
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "Control_Notas_Toma_Decisiones_Top50.csv";
+      a.click();
+      URL.revokeObjectURL(url);
+      showToast("Archivo CSV generado con la Nota Máxima oficial.", "emerald");
+    };
+
+    // =========================================================================
+    // 12. COMPARTIR ENLACE Y GENERADOR DE CÓDIGO QR EN VIVO
+    // =========================================================================
+    window.openShareModal = function () {
+      const modal = document.getElementById("shareModal");
+      const input = document.getElementById("shareLinkInput");
+      const warning = document.getElementById("sharePreviewWarning");
+      const currentUrl = window.location.href;
+
+      const isInternalPreview =
+        currentUrl.startsWith("about:") ||
+        currentUrl.startsWith("blob:") ||
+        currentUrl.startsWith("file:") ||
+        currentUrl.includes("localhost");
+
+      if (isInternalPreview) {
+        warning.classList.remove("hidden");
+        if (!input.value) {
+          input.value = "";
+        }
+      } else {
+        warning.classList.add("hidden");
+        if (!input.value) {
+          input.value = currentUrl;
+        }
+      }
+
+      modal.classList.remove("hidden");
+      window.generateQuizQR();
+    };
+
+    window.closeShareModal = function () {
+      document.getElementById("shareModal").classList.add("hidden");
+    };
+
+    window.generateQuizQR = function () {
+      const container = document.getElementById("qrCodeContainer");
+      const url = document.getElementById("shareLinkInput").value.trim();
+      container.innerHTML = "";
+
+      if (!url) {
+        container.innerHTML = `<p class="text-xs text-slate-400 text-center px-4">Pega tu enlace público arriba para generar el código QR escaneable.</p>`;
+        return;
+      }
+
+      if (typeof QRCode !== "undefined") {
+        try {
+          new QRCode(container, {
+            text: url,
+            width: 220,
+            height: 220,
+            colorDark: "#0f172a",
+            colorLight: "#ffffff",
+            correctLevel: QRCode.CorrectLevel.H
+          });
+        } catch (err) {
+          console.error("Error generando QR:", err);
+          container.innerHTML = `<p class="text-xs text-rose-500 text-center">No se pudo generar el QR para este enlace.</p>`;
+        }
+      } else {
+        container.innerHTML = `<p class="text-xs text-slate-500 text-center">Cargando generador QR...</p>`;
+      }
+    };
+
+    window.copyShareLink = function () {
+      const input = document.getElementById("shareLinkInput");
+      if (!input.value.trim()) {
+        showToast("Primero pega el enlace público del quiz para copiarlo.", "amber");
+        return;
+      }
+      input.select();
+      input.setSelectionRange(0, 99999);
+      try {
+        document.execCommand("copy");
+        showToast("Enlace del quiz copiado al portapapeles.", "emerald");
+      } catch {
+        showToast("Selecciona el enlace y cópialo manualmente (Ctrl+C).", "amber");
+      }
+    };
+
+    // Sistema de notificaciones Toast (reemplaza alert())
+    function showToast(message, color = "indigo") {
+      const container = document.getElementById("toastContainer");
+      const toast = document.createElement("div");
+      const styles = {
+        emerald: "bg-emerald-950/95 border-emerald-500/50 text-emerald-200",
+        rose: "bg-rose-950/95 border-rose-500/50 text-rose-200",
+        amber: "bg-amber-950/95 border-amber-500/50 text-amber-200",
+        indigo: "bg-indigo-950/95 border-indigo-500/50 text-indigo-200",
+        slate: "bg-slate-900/95 border-slate-700 text-slate-200"
+      };
+      toast.className = `pointer-events-auto px-4 py-3 rounded-xl border text-xs sm:text-sm font-medium shadow-xl fade-in ${styles[color] || styles.indigo}`;
+      toast.textContent = message;
+      container.appendChild(toast);
+
+      setTimeout(() => {
+        toast.style.opacity = "0";
+        toast.style.transition = "opacity 0.3s ease";
+        setTimeout(() => toast.remove(), 300);
+      }, 3800);
+    }
+
+    // Arrancar sincronización al cargar la página
+    window.addEventListener("load", () => {
+      initCloudSync();
+    });
+  </script>
+</body>
+</html>
